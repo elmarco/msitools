@@ -33,10 +33,18 @@ G_BEGIN_DECLS
 #define LIBMSI_RECORD_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj), LIBMSI_TYPE_RECORD, LibmsiRecordClass))
 
 typedef struct _LibmsiRecordClass LibmsiRecordClass;
+typedef struct _LibmsiRecordPrivate LibmsiRecordPrivate;
 
 struct _LibmsiRecordClass
 {
     GObjectClass parent_class;
+};
+
+struct _LibmsiRecord
+{
+    GObject parent;
+
+    LibmsiRecordPrivate *priv;
 };
 
 GType libmsi_record_get_type (void) G_GNUC_CONST;

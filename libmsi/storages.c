@@ -66,7 +66,7 @@ static STORAGE *create_storage(LibmsiStorageView *sv, const char *name)
     if (!storage)
         return NULL;
 
-    storage->str_index = _libmsi_add_string(sv->db->strings, name, -1, 1, StringNonPersistent);
+    storage->str_index = _libmsi_add_string(sv->db->priv->strings, name, -1, 1, StringNonPersistent);
 
     return storage;
 }
@@ -133,7 +133,7 @@ static unsigned storages_view_set_row(LibmsiView *view, unsigned row, LibmsiReco
         }
 
         storage = sv->storages[row];
-        name = strdup(msi_string_lookup_id(sv->db->strings, storage->str_index));
+        name = strdup(msi_string_lookup_id(sv->db->priv->strings, storage->str_index));
     } else {
         name = strdup(_libmsi_record_get_string_raw(rec, 1));
     }
@@ -181,7 +181,7 @@ static unsigned storages_view_delete_row(LibmsiView *view, unsigned row)
     if (row > sv->num_rows)
         return LIBMSI_RESULT_FUNCTION_FAILED;
 
-    name = msi_string_lookup_id(sv->db->strings, sv->storages[row]->str_index);
+    name = msi_string_lookup_id(sv->db->priv->strings, sv->storages[row]->str_index);
     if (!name)
     {
         WARN("failed to retrieve storage name\n");

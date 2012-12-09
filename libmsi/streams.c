@@ -75,7 +75,7 @@ static STREAM *create_stream(LibmsiStreamsView *sv, const char *name, bool encod
         name = decoded;
     }
 
-    stream->str_index = _libmsi_add_string(sv->db->strings, name, -1, 1, StringNonPersistent);
+    stream->str_index = _libmsi_add_string(sv->db->priv->strings, name, -1, 1, StringNonPersistent);
     stream->stream = stm;
     if (stream->stream)
         g_object_ref(G_OBJECT(stm));
@@ -148,7 +148,7 @@ static unsigned streams_view_set_row(LibmsiView *view, unsigned row, LibmsiRecor
         }
 
         stream = sv->streams[row];
-        name = strdup(msi_string_lookup_id(sv->db->strings, stream->str_index));
+        name = strdup(msi_string_lookup_id(sv->db->priv->strings, stream->str_index));
     } else {
         name = strdup(_libmsi_record_get_string_raw(rec, 1));
         if (!name)
@@ -214,7 +214,7 @@ static unsigned streams_view_delete_row(LibmsiView *view, unsigned row)
     if (row > sv->num_rows)
         return LIBMSI_RESULT_FUNCTION_FAILED;
 
-    name = msi_string_lookup_id(sv->db->strings, sv->streams[row]->str_index);
+    name = msi_string_lookup_id(sv->db->priv->strings, sv->streams[row]->str_index);
     if (!name)
     {
         WARN("failed to retrieve stream name\n");

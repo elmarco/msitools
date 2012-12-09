@@ -37,9 +37,14 @@ enum
 
 G_DEFINE_TYPE (LibmsiQuery, libmsi_query, G_TYPE_OBJECT);
 
+#define GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE((o), LIBMSI_TYPE_QUERY, LibmsiQueryPrivate))
+
 static void
-libmsi_query_init (LibmsiQuery *p)
+libmsi_query_init (LibmsiQuery *self)
 {
+    LibmsiQueryPrivate *p = GET_PRIVATE (self);
+
+    self->priv = p;
     list_init (&p->mem);
 }
 
@@ -47,7 +52,7 @@ static void
 libmsi_query_finalize (GObject *object)
 {
     LibmsiQuery *self = LIBMSI_QUERY (object);
-    LibmsiQuery *p = self;
+    LibmsiQueryPrivate *p = self->priv;
     struct list *ptr, *t;
 
     if (p->view && p->view->ops->delete)
@@ -68,7 +73,7 @@ libmsi_query_finalize (GObject *object)
 static void
 libmsi_query_set_property (GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
-    LibmsiQuery *p = LIBMSI_QUERY (object);
+    LibmsiQueryPrivate *p = GET_PRIVATE (object);
     g_return_if_fail (LIBMSI_IS_QUERY (object));
 
     switch (prop_id) {
@@ -89,7 +94,7 @@ libmsi_query_set_property (GObject *object, guint prop_id, const GValue *value, 
 static void
 libmsi_query_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
-    LibmsiQuery *p = LIBMSI_QUERY (object);
+    LibmsiQueryPrivate *p = GET_PRIVATE (object);
     g_return_if_fail (LIBMSI_IS_QUERY (object));
 
     switch (prop_id) {
@@ -130,13 +135,15 @@ libmsi_query_class_init (LibmsiQueryClass *klass)
         g_param_spec_string ("query", "query", "query", NULL,
                              G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE |
                              G_PARAM_STATIC_STRINGS));
+
+    g_type_class_add_private (klass, sizeof(LibmsiQueryPrivate));
 }
 
 /* TODO: use GInitable */
 static gboolean
 init (LibmsiQuery *self, GError **error)
 {
-    LibmsiQuery *p = self;
+    LibmsiQueryPrivate *p = self->priv;
     unsigned r;
 
     r = _libmsi_parse_sql (p->database, p->query, &p->view, &p->mem);
@@ -362,7 +369,7 @@ unsigned msi_view_get_row(LibmsiDatabase *db, LibmsiView *view, unsigned row, Li
         {
             const char *sval;
 
-            sval = msi_string_lookup_id(db->strings, ival);
+            sval = msi_string_lookup_id(db->priv->strings, ival);
             libmsi_record_set_string(*rec, i, sval);
         }
         else
@@ -384,13 +391,13 @@ LibmsiResult _libmsi_query_fetch(LibmsiQuery *query, LibmsiRecord **prec)
 
     TRACE("%p %p\n", query, prec );
 
-    view = query->view;
+    view = query->priv->view;
     if( !view )
         return LIBMSI_RESULT_FUNCTION_FAILED;
 
-    r = msi_view_get_row(query->database, view, query->row, prec);
+    r = msi_view_get_row(query->priv->database, view, query->priv->row, prec);
     if (r == LIBMSI_RESULT_SUCCESS)
-        query->row ++;
+        query->priv->row ++;
 
     return r;
 }
@@ -424,7 +431,7 @@ LibmsiResult libmsi_query_close(LibmsiQuery *query)
         return LIBMSI_RESULT_INVALID_HANDLE;
 
     g_object_ref(query);
-    view = query->view;
+    view = query->priv->view;
     if( !view )
         return LIBMSI_RESULT_FUNCTION_FAILED;
     if( !view->ops->close )
@@ -441,12 +448,12 @@ LibmsiResult _libmsi_query_execute(LibmsiQuery *query, LibmsiRecord *rec )
 
     TRACE("%p %p\n", query, rec);
 
-    view = query->view;
+    view = query->priv->view;
     if( !view )
         return LIBMSI_RESULT_FUNCTION_FAILED;
     if( !view->ops->execute )
         return LIBMSI_RESULT_FUNCTION_FAILED;
-    query->row = 0;
+    query->priv->row = 0;
 
     return view->ops->execute( view, rec );
 }
@@ -514,7 +521,7 @@ unsigned _libmsi_query_get_column_info( LibmsiQuery *query, LibmsiColInfo info, 
 {
     unsigned r = LIBMSI_RESULT_FUNCTION_FAILED, i, count = 0, type;
     LibmsiRecord *rec;
-    LibmsiView *view = query->view;
+    LibmsiView *view = query->priv->view;
     const char *name;
     bool temporary;
 
@@ -586,7 +593,7 @@ LibmsiDBError libmsi_query_get_error( LibmsiQuery *query, char *buffer, unsigned
         return LIBMSI_DB_ERROR_INVALIDARG;
 
     g_object_ref(query);
-    if ((r = query->view->error)) column = query->view->error_column;
+    if ((r = query->priv->view->error)) column = query->priv->view->error_column;
     else column = szEmpty;
 
     len = strlen(column);

@@ -33,10 +33,18 @@ G_BEGIN_DECLS
 #define LIBMSI_DATABASE_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj), LIBMSI_TYPE_DATABASE, LibmsiDatabaseClass))
 
 typedef struct _LibmsiDatabaseClass LibmsiDatabaseClass;
+typedef struct _LibmsiDatabasePrivate LibmsiDatabasePrivate;
 
 struct _LibmsiDatabaseClass
 {
     GObjectClass parent_class;
+};
+
+struct _LibmsiDatabase
+{
+    GObject parent;
+
+    LibmsiDatabasePrivate *priv;
 };
 
 GType libmsi_database_get_type (void) G_GNUC_CONST;
