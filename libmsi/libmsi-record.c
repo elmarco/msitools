@@ -149,12 +149,12 @@ libmsi_record_class_init (LibmsiRecordClass *klass)
     g_type_class_add_private (klass, sizeof(LibmsiRecordPrivate));
 }
 
-unsigned libmsi_record_get_field_count( const LibmsiRecord *rec )
+guint
+libmsi_record_get_field_count (const LibmsiRecord *self)
 {
-    if( !rec )
-        return -1;
+    g_return_val_if_fail (LIBMSI_IS_RECORD (self), 0);
 
-    return rec->priv->count;
+    return self->priv->count;
 }
 
 static bool expr_int_from_string( const char *str, int *out )
@@ -223,11 +223,12 @@ unsigned _libmsi_record_copy_field( LibmsiRecord *in_rec, unsigned in_n,
     return r;
 }
 
-int libmsi_record_get_int( const LibmsiRecord *rec, unsigned field)
+gint
+libmsi_record_get_int (const LibmsiRecord *rec, guint field)
 {
     int ret = 0;
 
-    TRACE("%p %d\n", rec, field);
+    g_return_val_if_fail (LIBMSI_IS_RECORD (rec), LIBMSI_NULL_INT);
 
     if( !rec )
         return LIBMSI_NULL_INT;
@@ -250,14 +251,13 @@ int libmsi_record_get_int( const LibmsiRecord *rec, unsigned field)
     return LIBMSI_NULL_INT;
 }
 
-LibmsiResult libmsi_record_clear( LibmsiRecord *rec )
+gboolean libmsi_record_clear( LibmsiRecord *rec )
 {
     unsigned i;
 
-    TRACE("%d\n", rec );
+    g_return_val_if_fail (LIBMSI_IS_RECORD (rec), FALSE);
 
-    if( !rec )
-        return LIBMSI_RESULT_INVALID_HANDLE;
+    TRACE("%p\n", rec );
 
     g_object_ref(rec);
     for( i=0; i<=rec->priv->count; i++)
@@ -268,24 +268,23 @@ LibmsiResult libmsi_record_clear( LibmsiRecord *rec )
     }
     g_object_unref(rec);
 
-    return LIBMSI_RESULT_SUCCESS;
+    return TRUE;
 }
 
-LibmsiResult libmsi_record_set_int( LibmsiRecord *rec, unsigned field, int iVal )
+gboolean libmsi_record_set_int( LibmsiRecord *rec, unsigned field, int iVal )
 {
     TRACE("%p %u %d\n", rec, field, iVal);
 
-    if( !rec )
-        return LIBMSI_RESULT_INVALID_HANDLE;
+    g_return_val_if_fail (LIBMSI_IS_RECORD (rec), FALSE);
 
     if( field > rec->priv->count )
-        return LIBMSI_RESULT_INVALID_PARAMETER;
+        return FALSE;
 
     _libmsi_free_field( &rec->priv->fields[field] );
     rec->priv->fields[field].type = LIBMSI_FIELD_TYPE_INT;
     rec->priv->fields[field].u.iVal = iVal;
 
-    return LIBMSI_RESULT_SUCCESS;
+    return TRUE;
 }
 
 gboolean libmsi_record_is_null( const LibmsiRecord *rec, unsigned field )
@@ -294,8 +293,7 @@ gboolean libmsi_record_is_null( const LibmsiRecord *rec, unsigned field )
 
     TRACE("%p %d\n", rec, field );
 
-    if( !rec )
-        return 0;
+    g_return_val_if_fail (LIBMSI_IS_RECORD (rec), TRUE);
 
     r = ( field > rec->priv->count ) ||
         ( rec->priv->fields[field].type == LIBMSI_FIELD_TYPE_NULL );
@@ -382,17 +380,16 @@ unsigned _libmsi_record_get_string(const LibmsiRecord *rec, unsigned field,
     return ret;
 }
 
-LibmsiResult libmsi_record_set_string( LibmsiRecord *rec, unsigned field, const char *szValue )
+gboolean libmsi_record_set_string( LibmsiRecord *rec, unsigned field, const char *szValue )
 {
     char *str;
 
-    TRACE("%d %d %s\n", rec, field, debugstr_a(szValue));
+    TRACE("%p %d %s\n", rec, field, debugstr_a(szValue));
 
-    if( !rec )
-        return LIBMSI_RESULT_INVALID_HANDLE;
+    g_return_val_if_fail (LIBMSI_IS_RECORD (rec), FALSE);
 
     if( field > rec->priv->count )
-        return LIBMSI_RESULT_INVALID_FIELD;
+        return FALSE;
 
     _libmsi_free_field( &rec->priv->fields[field] );
 
@@ -408,7 +405,7 @@ LibmsiResult libmsi_record_set_string( LibmsiRecord *rec, unsigned field, const 
         rec->priv->fields[field].u.szVal = NULL;
     }
 
-    return 0;
+    return TRUE;
 }
 
 /* read the data in a file into a memory-backed GsfInput */
@@ -497,20 +494,19 @@ unsigned _libmsi_record_load_stream_from_file(LibmsiRecord *rec, unsigned field,
     return LIBMSI_RESULT_SUCCESS;
 }
 
-LibmsiResult libmsi_record_load_stream(LibmsiRecord *rec, unsigned field, const char *szFilename)
+gboolean libmsi_record_load_stream(LibmsiRecord *rec, unsigned field, const char *szFilename)
 {
     unsigned ret;
 
-    TRACE("%d %d %s\n", rec, field, debugstr_a(szFilename));
+    TRACE("%p %d %s\n", rec, field, debugstr_a(szFilename));
 
-    if( !rec )
-        return LIBMSI_RESULT_INVALID_HANDLE;
+    g_return_val_if_fail (LIBMSI_IS_RECORD (rec), FALSE);
 
     g_object_ref(rec);
     ret = _libmsi_record_load_stream_from_file( rec, field, szFilename );
     g_object_unref(rec);
 
-    return ret;
+    return ret == LIBMSI_RESULT_SUCCESS;
 }
 
 unsigned _libmsi_record_save_stream(const LibmsiRecord *rec, unsigned field, char *buf, unsigned *sz)
@@ -562,20 +558,19 @@ unsigned _libmsi_record_save_stream(const LibmsiRecord *rec, unsigned field, cha
     return LIBMSI_RESULT_SUCCESS;
 }
 
-LibmsiResult libmsi_record_save_stream(LibmsiRecord *rec, unsigned field, char *buf, unsigned *sz)
+gboolean libmsi_record_save_stream(LibmsiRecord *rec, unsigned field, char *buf, unsigned *sz)
 {
     unsigned ret;
 
     TRACE("%d %d %p %p\n", rec, field, buf, sz);
 
-    if( !rec )
-        return LIBMSI_RESULT_INVALID_HANDLE;
+    g_return_val_if_fail (LIBMSI_IS_RECORD (rec), FALSE);
 
     g_object_ref(rec);
     ret = _libmsi_record_save_stream( rec, field, buf, sz );
     g_object_unref(rec);
 
-    return ret;
+    return ret == LIBMSI_RESULT_SUCCESS;
 }
 
 unsigned _libmsi_record_set_gsf_input( LibmsiRecord *rec, unsigned field, GsfInput *stm )
