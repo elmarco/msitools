@@ -178,9 +178,8 @@ static int add_stream(const char *stream, const char *file, GError **error)
     if (r != LIBMSI_RESULT_SUCCESS)
         fprintf(stderr, "failed to open query (%u)\n", r);
 
-    r = libmsi_query_execute(query, rec);
-    if (r != LIBMSI_RESULT_SUCCESS)
-        fprintf(stderr, "failed to execute query (%u)\n", r);
+    if (!libmsi_query_execute(query, rec, error))
+        fprintf(stderr, "failed to execute query\n");
 
     g_object_unref(rec);
     libmsi_query_close(query, error);
@@ -200,9 +199,8 @@ static int do_query(const char *sql, void *opaque)
         return r;
     }
 
-    r = libmsi_query_execute(query, NULL);
-    if (r != LIBMSI_RESULT_SUCCESS)
-        fprintf(stderr, "failed to execute query (%u)\n", r);
+    if (!libmsi_query_execute(query, NULL, error))
+        fprintf(stderr, "failed to execute query\n");
 
     libmsi_query_close(query, error);
     g_object_unref(query);
