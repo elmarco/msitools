@@ -33,18 +33,10 @@ G_BEGIN_DECLS
 #define LIBMSI_QUERY_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj), LIBMSI_TYPE_QUERY, LibmsiQueryClass))
 
 typedef struct _LibmsiQueryClass LibmsiQueryClass;
-typedef struct _LibmsiQueryPrivate LibmsiQueryPrivate;
 
 struct _LibmsiQueryClass
 {
     GObjectClass parent_class;
-};
-
-struct _LibmsiQuery
-{
-    GObject parent;
-
-    LibmsiQueryPrivate *priv;
 };
 
 GType libmsi_query_get_type (void) G_GNUC_CONST;

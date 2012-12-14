@@ -33,18 +33,10 @@ G_BEGIN_DECLS
 #define LIBMSI_SUMMARY_INFO_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj), LIBMSI_TYPE_SUMMARY_INFO, LibmsiSummaryInfoClass))
 
 typedef struct _LibmsiSummaryInfoClass LibmsiSummaryInfoClass;
-typedef struct _LibmsiSummaryInfoPrivate LibmsiSummaryInfoPrivate;
 
 struct _LibmsiSummaryInfoClass
 {
     GObjectClass parent_class;
-};
-
-struct _LibmsiSummaryInfo
-{
-    GObject parent;
-
-    LibmsiSummaryInfoPrivate *priv;
 };
 
 GType libmsi_summary_info_get_type (void) G_GNUC_CONST;

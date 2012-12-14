@@ -313,12 +313,12 @@ unsigned write_stream_data( LibmsiDatabase *db, const char *stname,
     char *encname;
     GsfOutput *stm;
 
-    if (!db->priv->outfile)
+    if (!db->outfile)
         return ret;
 
     encname = encode_streamname(true, stname );
 
-    stm = gsf_outfile_new_child( db->priv->outfile, encname, false );
+    stm = gsf_outfile_new_child( db->outfile, encname, false );
     msi_free( encname );
     if( !stm )
     {
@@ -383,7 +383,7 @@ static unsigned read_table_from_storage( LibmsiDatabase *db, LibmsiTable *t, Gsf
 
     TRACE("%s\n",debugstr_a(t->name));
 
-    row_size = msi_table_get_row_size( db, t->colinfo, t->col_count, db->priv->bytes_per_strref );
+    row_size = msi_table_get_row_size( db, t->colinfo, t->col_count, db->bytes_per_strref );
     row_size_mem = msi_table_get_row_size( db, t->colinfo, t->col_count, LONG_STR_BYTES );
 
     /* if we can't read the table, just assume that it's empty */
@@ -421,7 +421,7 @@ static unsigned read_table_from_storage( LibmsiDatabase *db, LibmsiTable *t, Gsf
         for (j = 0; j < t->col_count; j++)
         {
             unsigned m = bytes_per_column( db, &t->colinfo[j], LONG_STR_BYTES );
-            unsigned n = bytes_per_column( db, &t->colinfo[j], db->priv->bytes_per_strref );
+            unsigned n = bytes_per_column( db, &t->colinfo[j], db->bytes_per_strref );
             unsigned k;
 
             if ( n != 2 && n != 3 && n != 4 )
@@ -458,9 +458,9 @@ err:
 
 void free_cached_tables( LibmsiDatabase *db )
 {
-    while( !list_empty( &db->priv->tables ) )
+    while( !list_empty( &db->tables ) )
     {
-        LibmsiTable *t = LIST_ENTRY( list_head( &db->priv->tables ), LibmsiTable, entry );
+        LibmsiTable *t = LIST_ENTRY( list_head( &db->tables ), LibmsiTable, entry );
 
         list_remove( &t->entry );
         free_table( t );
@@ -471,7 +471,7 @@ static LibmsiTable *find_cached_table( LibmsiDatabase *db, const char *name )
 {
     LibmsiTable *t;
 
-    LIST_FOR_EACH_ENTRY( t, &db->priv->tables, LibmsiTable, entry )
+    LIST_FOR_EACH_ENTRY( t, &db->tables, LibmsiTable, entry )
         if( !strcmp( name, t->name ) )
             return t;
 
@@ -581,7 +581,7 @@ unsigned _libmsi_open_table( LibmsiDatabase *db, const char *name, bool encoded 
     if (!strcmp( name, szTables ) || !strcmp( name, szColumns ))
         table->persistent = LIBMSI_CONDITION_NONE;
 
-    list_add_head( &db->priv->tables, &table->entry );
+    list_add_head( &db->tables, &table->entry );
     return LIBMSI_RESULT_SUCCESS;
 }
 
@@ -615,7 +615,7 @@ static unsigned get_table( LibmsiDatabase *db, const char *name, LibmsiTable **t
         free_table( table );
         return r;
     }
-    r = read_table_from_storage( db, table, db->priv->infile );
+    r = read_table_from_storage( db, table, db->infile );
     if (r != LIBMSI_RESULT_SUCCESS)
     {
         list_remove(&table->entry);
@@ -656,7 +656,7 @@ static unsigned get_tablecolumns( LibmsiDatabase *db, const char *szTableName, L
     }
 
     /* convert table and column names to IDs from the string table */
-    r = _libmsi_id_from_string_utf8( db->priv->strings, szTableName, &table_id );
+    r = _libmsi_id_from_string_utf8( db->strings, szTableName, &table_id );
     if (r != LIBMSI_RESULT_SUCCESS)
     {
         WARN("Couldn't find id for %s\n", debugstr_a(szTableName));
@@ -689,9 +689,9 @@ static unsigned get_tablecolumns( LibmsiDatabase *db, const char *szTableName, L
                 ERR("duplicate column %d\n", col);
                 continue;
             }
-            colinfo[col - 1].tablename = msi_string_lookup_id( db->priv->strings, table_id );
+            colinfo[col - 1].tablename = msi_string_lookup_id( db->strings, table_id );
             colinfo[col - 1].number = col;
-            colinfo[col - 1].colname = msi_string_lookup_id( db->priv->strings, id );
+            colinfo[col - 1].colname = msi_string_lookup_id( db->strings, id );
             colinfo[col - 1].type = read_table_int( table->data, i, table->colinfo[3].offset,
                                                     sizeof(uint16_t) ) - (1 << 15);
             colinfo[col - 1].offset = 0;
@@ -756,12 +756,12 @@ unsigned msi_create_table( LibmsiDatabase *db, const char *name, column_info *co
 
     for( i = 0, col = col_info; col; i++, col = col->next )
     {
-        unsigned table_id = _libmsi_add_string( db->priv->strings, col->table, -1, 1, string_persistence );
-        unsigned col_id = _libmsi_add_string( db->priv->strings, col->column, -1, 1, string_persistence );
+        unsigned table_id = _libmsi_add_string( db->strings, col->table, -1, 1, string_persistence );
+        unsigned col_id = _libmsi_add_string( db->strings, col->column, -1, 1, string_persistence );
 
-        table->colinfo[ i ].tablename = msi_string_lookup_id( db->priv->strings, table_id );
+        table->colinfo[ i ].tablename = msi_string_lookup_id( db->strings, table_id );
         table->colinfo[ i ].number = i + 1;
-        table->colinfo[ i ].colname = msi_string_lookup_id( db->priv->strings, col_id );
+        table->colinfo[ i ].colname = msi_string_lookup_id( db->strings, col_id );
         table->colinfo[ i ].type = col->type;
         table->colinfo[ i ].offset = 0;
         table->colinfo[ i ].ref_count = 0;
@@ -851,7 +851,7 @@ err:
         tv->ops->delete( tv );
 
     if (r == LIBMSI_RESULT_SUCCESS)
-        list_add_head( &db->priv->tables, &table->entry );
+        list_add_head( &db->tables, &table->entry );
     else
         free_table( table );
 
@@ -976,7 +976,7 @@ bool table_view_exists( LibmsiDatabase *db, const char *name )
         !strcmp( name, szStreams ) || !strcmp( name, szStorages ) )
         return true;
 
-    r = _libmsi_id_from_string_utf8( db->priv->strings, name, &table_id );
+    r = _libmsi_id_from_string_utf8( db->strings, name, &table_id );
     if( r != LIBMSI_RESULT_SUCCESS )
     {
         TRACE("Couldn't find id for %s\n", debugstr_a(name));
@@ -1083,7 +1083,7 @@ static unsigned msi_stream_name( const LibmsiTableView *tv, unsigned row, char *
 
             if ( tv->columns[i].type & MSITYPE_STRING )
             {
-                sval = msi_string_lookup_id( tv->db->priv->strings, ival );
+                sval = msi_string_lookup_id( tv->db->strings, ival );
                 if ( !sval )
                 {
                     r = LIBMSI_RESULT_INVALID_PARAMETER;
@@ -1269,7 +1269,7 @@ static unsigned get_table_value_from_record( LibmsiTableView *tv, LibmsiRecord *
         const char *sval = _libmsi_record_get_string_raw( rec, iField );
         if (sval)
         {
-            r = _libmsi_id_from_string_utf8(tv->db->priv->strings, sval, pvalue);
+            r = _libmsi_id_from_string_utf8(tv->db->strings, sval, pvalue);
             if (r != LIBMSI_RESULT_SUCCESS)
                 return LIBMSI_RESULT_NOT_FOUND;
         }
@@ -1354,7 +1354,7 @@ static unsigned table_view_set_row( LibmsiView *view, unsigned row, LibmsiRecord
                 if ( r != LIBMSI_RESULT_SUCCESS )
                 {
                     const char *sval = _libmsi_record_get_string_raw( rec, i + 1 );
-                    val = _libmsi_add_string( tv->db->priv->strings, sval, -1, 1,
+                    val = _libmsi_add_string( tv->db->strings, sval, -1, 1,
                       persistent ? StringPersistent : StringNonPersistent );
                 }
                 else
@@ -2024,7 +2024,7 @@ unsigned _libmsi_database_commit_tables( LibmsiDatabase *db, unsigned bytes_per_
     /* Ensure the Tables stream is written.  */
     get_table( db, szTables, &t );
 
-    LIST_FOR_EACH_ENTRY_SAFE( table, table2, &db->priv->tables, LibmsiTable, entry )
+    LIST_FOR_EACH_ENTRY_SAFE( table, table2, &db->tables, LibmsiTable, entry )
     {
         r = get_table( db, table->name, &t );
         if( r != LIBMSI_RESULT_SUCCESS )
@@ -2269,7 +2269,7 @@ static unsigned* msi_record_to_row( const LibmsiTableView *tv, LibmsiRecord *rec
             str = _libmsi_record_get_string_raw( rec, i+1 );
             if (str)
             {
-                r = _libmsi_id_from_string_utf8( tv->db->priv->strings, str, &data[i] );
+                r = _libmsi_id_from_string_utf8( tv->db->strings, str, &data[i] );
 
                 /* if there's no matching string in the string table,
                    these keys can't match any record, so fail now. */

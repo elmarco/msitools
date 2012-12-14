@@ -486,7 +486,7 @@ static unsigned expr_eval_string( LibmsiWhereView *wv, const unsigned rows[],
     case EXPR_COL_NUMBER_STRING:
         r = expr_fetch_value(&expr->u.column, rows, &val);
         if (r == LIBMSI_RESULT_SUCCESS)
-            *str =  msi_string_lookup_id(wv->db->priv->strings, val);
+            *str =  msi_string_lookup_id(wv->db->strings, val);
         else
             *str = NULL;
         break;

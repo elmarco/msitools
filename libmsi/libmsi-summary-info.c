@@ -39,8 +39,6 @@ enum
 
 G_DEFINE_TYPE (LibmsiSummaryInfo, libmsi_summary_info, G_TYPE_OBJECT);
 
-#define GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE((o), LIBMSI_TYPE_SUMMARY_INFO, LibmsiSummaryInfoPrivate))
-
 static const char szSumInfo[] = "\5SummaryInformation";
 static const uint8_t fmtid_SummaryInformation[16] =
         { 0xe0, 0x85, 0x9f, 0xf2, 0xf9, 0x4f, 0x68, 0x10, 0xab, 0x91, 0x08, 0x00, 0x2b, 0x27, 0xb3, 0xd9};
@@ -50,9 +48,6 @@ static unsigned load_summary_info( LibmsiSummaryInfo *si, GsfInput *stm );
 static void
 libmsi_summary_info_init (LibmsiSummaryInfo *self)
 {
-    LibmsiSummaryInfoPrivate *p = GET_PRIVATE (self);
-
-    self->priv = p;
 }
 
 static void
@@ -66,14 +61,14 @@ free_prop (LibmsiOLEVariant *prop)
 static void
 libmsi_summary_info_finalize (GObject *object)
 {
-    LibmsiSummaryInfoPrivate *p = LIBMSI_SUMMARY_INFO (object)->priv;
+    LibmsiSummaryInfo *self = LIBMSI_SUMMARY_INFO (object);
     unsigned i;
 
     for (i = 0; i < MSI_MAX_PROPS; i++)
-        free_prop (&p->property[i]);
+        free_prop (&self->property[i]);
 
-    if (p->database)
-        g_object_unref (p->database);
+    if (self->database)
+        g_object_unref (self->database);
 
     G_OBJECT_CLASS (libmsi_summary_info_parent_class)->finalize (object);
 }
@@ -82,15 +77,15 @@ static void
 summary_info_set_property (GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
     g_return_if_fail (LIBMSI_IS_SUMMARY_INFO (object));
-    LibmsiSummaryInfoPrivate *p = LIBMSI_SUMMARY_INFO (object)->priv;
+    LibmsiSummaryInfo *self = LIBMSI_SUMMARY_INFO (object);
 
     switch (prop_id) {
     case PROP_DATABASE:
-        g_return_if_fail (p->database == NULL);
-        p->database = g_value_dup_object (value);
+        g_return_if_fail (self->database == NULL);
+        self->database = g_value_dup_object (value);
         break;
     case PROP_UPDATE_COUNT:
-        p->update_count = g_value_get_uint (value);
+        self->update_count = g_value_get_uint (value);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -102,14 +97,14 @@ static void
 summary_info_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
     g_return_if_fail (LIBMSI_IS_SUMMARY_INFO (object));
-    LibmsiSummaryInfoPrivate *p = LIBMSI_SUMMARY_INFO (object)->priv;
+    LibmsiSummaryInfo *self = LIBMSI_SUMMARY_INFO (object);
 
     switch (prop_id) {
     case PROP_DATABASE:
-        g_value_set_object (value, p->database);
+        g_value_set_object (value, self->database);
         break;
     case PROP_UPDATE_COUNT:
-        g_value_set_uint (value, p->update_count);
+        g_value_set_uint (value, self->update_count);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -121,12 +116,11 @@ static void
 libmsi_summary_info_constructed (GObject *object)
 {
     LibmsiSummaryInfo *self = LIBMSI_SUMMARY_INFO (object);
-    LibmsiSummaryInfoPrivate *p = self->priv;
     GsfInput *stm = NULL;
     unsigned r;
 
     /* read the stream... if we fail, we'll start with an empty property set */
-    r = msi_get_raw_stream (p->database, szSumInfo, &stm);
+    r = msi_get_raw_stream (self->database, szSumInfo, &stm);
     if (r == 0) {
         load_summary_info (self, stm);
         g_object_unref (G_OBJECT (stm));
@@ -154,8 +148,6 @@ libmsi_summary_info_class_init (LibmsiSummaryInfoClass *klass)
         g_param_spec_uint ("update-count", "update-count", "update-count", 0, G_MAXUINT, 0,
                           G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE |
                           G_PARAM_STATIC_STRINGS));
-
-    g_type_class_add_private (klass, sizeof(LibmsiSummaryInfoPrivate));
 }
 
 static unsigned get_type( unsigned uiProperty )
@@ -412,7 +404,7 @@ static unsigned load_summary_info( LibmsiSummaryInfo *si, GsfInput *stm )
     }
 
     /* read all the data in one go */
-    read_properties_from_data( si->priv->property,
+    read_properties_from_data( si->property,
                                &data[dwOffset],
                                cbSection, cProperties );
 
@@ -494,10 +486,10 @@ static unsigned suminfo_persist( LibmsiSummaryInfo *si )
     int i;
 
     /* add up how much space the data will take and calculate the offsets */
-    cProperties = get_property_count( si->priv->property );
+    cProperties = get_property_count( si->property );
     cbSection = 8 + cProperties * 8;
     for( i = 0; i < MSI_MAX_PROPS; i++ )
-        cbSection += write_property_to_data( &si->priv->property[i], NULL );
+        cbSection += write_property_to_data( &si->property[i], NULL );
 
     sz = 28 + 20 + cbSection;
     data = msi_alloc_zero( sz );
@@ -525,7 +517,7 @@ static unsigned suminfo_persist( LibmsiSummaryInfo *si )
     dwOffset = 8 + cProperties * 8;
     for( i = 0; i < MSI_MAX_PROPS; i++ )
     {
-        int propsz = write_property_to_data( &si->priv->property[i], NULL );
+        int propsz = write_property_to_data( &si->property[i], NULL );
         if( !propsz )
             continue;
         sz += write_dword(data, sz, i);
@@ -536,11 +528,11 @@ static unsigned suminfo_persist( LibmsiSummaryInfo *si )
 
     /* write out the data */
     for( i = 0; i < MSI_MAX_PROPS; i++ )
-        sz += write_property_to_data( &si->priv->property[i], &data[sz] );
+        sz += write_property_to_data( &si->property[i], &data[sz] );
 
     assert(sz == 28 + 20 + cbSection);
 
-    r = write_raw_stream_data(si->priv->database, szSumInfo, data, sz, &stm);
+    r = write_raw_stream_data(si->database, szSumInfo, data, sz, &stm);
     if (r == 0) {
         g_object_unref(G_OBJECT(stm));
     }
@@ -596,7 +588,7 @@ LibmsiResult libmsi_summary_info_get_property_count(LibmsiSummaryInfo *si, unsig
 
     g_object_ref(si);
     if( pCount )
-        *pCount = get_property_count( si->priv->property );
+        *pCount = get_property_count( si->property );
     g_object_unref(si);
 
     return LIBMSI_RESULT_SUCCESS;
@@ -622,7 +614,7 @@ LibmsiResult libmsi_summary_info_get_property(
         return LIBMSI_RESULT_INVALID_HANDLE;
 
     g_object_ref(si);
-    prop = &si->priv->property[uiProperty];
+    prop = &si->property[uiProperty];
 
     switch( prop->vt )
     {
@@ -685,15 +677,15 @@ static LibmsiResult _libmsi_summary_info_set_property( LibmsiSummaryInfo *si, un
 
     g_object_ref(si);
 
-    prop = &si->priv->property[uiProperty];
+    prop = &si->property[uiProperty];
 
     if( prop->vt == OLEVT_EMPTY )
     {
         ret = LIBMSI_RESULT_FUNCTION_FAILED;
-        if( !si->priv->update_count )
+        if( !si->update_count )
             goto end;
 
-        si->priv->update_count--;
+        si->update_count--;
     }
     else if( prop->vt != type )
     {

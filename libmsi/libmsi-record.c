@@ -36,8 +36,6 @@ enum
 
 G_DEFINE_TYPE (LibmsiRecord, libmsi_record, G_TYPE_OBJECT);
 
-#define GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE((o), LIBMSI_TYPE_RECORD, LibmsiRecordPrivate))
-
 #define LIBMSI_FIELD_TYPE_NULL   0
 #define LIBMSI_FIELD_TYPE_INT    1
 #define LIBMSI_FIELD_TYPE_STR   3
@@ -46,9 +44,6 @@ G_DEFINE_TYPE (LibmsiRecord, libmsi_record, G_TYPE_OBJECT);
 static void
 libmsi_record_init (LibmsiRecord *self)
 {
-    LibmsiRecordPrivate *p = GET_PRIVATE (self);
-
-    self->priv = p;
 }
 
 static void
@@ -76,13 +71,13 @@ _libmsi_free_field (LibmsiField *field )
 static void
 libmsi_record_finalize (GObject *object)
 {
-    LibmsiRecordPrivate *p = LIBMSI_RECORD (object)->priv;
+    LibmsiRecord *self = LIBMSI_RECORD (object);
     unsigned i;
 
-    for (i = 0; i <= p->count; i++ )
-        _libmsi_free_field (&p->fields[i]);
+    for (i = 0; i <= self->count; i++ )
+        _libmsi_free_field (&self->fields[i]);
 
-    g_free (p->fields);
+    g_free (self->fields);
 
     G_OBJECT_CLASS (libmsi_record_parent_class)->finalize (object);
 }
@@ -91,11 +86,11 @@ static void
 libmsi_record_set_property (GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
     g_return_if_fail (LIBMSI_IS_RECORD (object));
-    LibmsiRecordPrivate *p = LIBMSI_RECORD (object)->priv;
+    LibmsiRecord *self = LIBMSI_RECORD (object);
 
     switch (prop_id) {
     case PROP_COUNT:
-        p->count = g_value_get_uint (value);
+        self->count = g_value_get_uint (value);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -107,11 +102,11 @@ static void
 libmsi_record_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
     g_return_if_fail (LIBMSI_IS_RECORD (object));
-    LibmsiRecordPrivate *p = LIBMSI_RECORD (object)->priv;
+    LibmsiRecord *self = LIBMSI_RECORD (object);
 
     switch (prop_id) {
     case PROP_COUNT:
-        g_value_set_uint (value, p->count);
+        g_value_set_uint (value, self->count);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -123,10 +118,9 @@ static void
 libmsi_record_constructed (GObject *object)
 {
     LibmsiRecord *self = LIBMSI_RECORD (object);
-    LibmsiRecordPrivate *p = self->priv;
 
     // FIXME: +1 could be removed if accessing with idx-1
-    p->fields = g_new0 (LibmsiField, p->count + 1);
+    self->fields = g_new0 (LibmsiField, self->count + 1);
 
     G_OBJECT_CLASS (libmsi_record_parent_class)->constructed (object);
 }
@@ -145,8 +139,6 @@ libmsi_record_class_init (LibmsiRecordClass *klass)
         g_param_spec_uint ("count", "count", "count", 0, 65535, 0,
                            G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE |
                            G_PARAM_STATIC_STRINGS));
-
-    g_type_class_add_private (klass, sizeof(LibmsiRecordPrivate));
 }
 
 guint
@@ -154,7 +146,7 @@ libmsi_record_get_field_count (const LibmsiRecord *self)
 {
     g_return_val_if_fail (LIBMSI_IS_RECORD (self), 0);
 
-    return self->priv->count;
+    return self->count;
 }
 
 static bool expr_int_from_string( const char *str, int *out )
@@ -185,15 +177,15 @@ unsigned _libmsi_record_copy_field( LibmsiRecord *in_rec, unsigned in_n,
 {
     unsigned r = LIBMSI_RESULT_SUCCESS;
 
-    if ( in_n > in_rec->priv->count || out_n > out_rec->priv->count )
+    if ( in_n > in_rec->count || out_n > out_rec->count )
         r = LIBMSI_RESULT_FUNCTION_FAILED;
     else if ( in_rec != out_rec || in_n != out_n )
     {
         char *str;
         LibmsiField *in, *out;
 
-        in = &in_rec->priv->fields[in_n];
-        out = &out_rec->priv->fields[out_n];
+        in = &in_rec->fields[in_n];
+        out = &out_rec->fields[out_n];
 
         switch ( in->type )
         {
@@ -233,15 +225,15 @@ libmsi_record_get_int (const LibmsiRecord *rec, guint field)
     if( !rec )
         return LIBMSI_NULL_INT;
 
-    if( field > rec->priv->count )
+    if( field > rec->count )
         return LIBMSI_NULL_INT;
 
-    switch( rec->priv->fields[field].type )
+    switch( rec->fields[field].type )
     {
     case LIBMSI_FIELD_TYPE_INT:
-        return rec->priv->fields[field].u.iVal;
+        return rec->fields[field].u.iVal;
     case LIBMSI_FIELD_TYPE_STR:
-        if( expr_int_from_string( rec->priv->fields[field].u.szVal, &ret ) )
+        if( expr_int_from_string( rec->fields[field].u.szVal, &ret ) )
             return ret;
         return LIBMSI_NULL_INT;
     default:
@@ -260,11 +252,11 @@ gboolean libmsi_record_clear( LibmsiRecord *rec )
     TRACE("%p\n", rec );
 
     g_object_ref(rec);
-    for( i=0; i<=rec->priv->count; i++)
+    for( i=0; i<=rec->count; i++)
     {
-        _libmsi_free_field( &rec->priv->fields[i] );
-        rec->priv->fields[i].type = LIBMSI_FIELD_TYPE_NULL;
-        rec->priv->fields[i].u.iVal = 0;
+        _libmsi_free_field( &rec->fields[i] );
+        rec->fields[i].type = LIBMSI_FIELD_TYPE_NULL;
+        rec->fields[i].u.iVal = 0;
     }
     g_object_unref(rec);
 
@@ -277,12 +269,12 @@ gboolean libmsi_record_set_int( LibmsiRecord *rec, unsigned field, int iVal )
 
     g_return_val_if_fail (LIBMSI_IS_RECORD (rec), FALSE);
 
-    if( field > rec->priv->count )
+    if( field > rec->count )
         return FALSE;
 
-    _libmsi_free_field( &rec->priv->fields[field] );
-    rec->priv->fields[field].type = LIBMSI_FIELD_TYPE_INT;
-    rec->priv->fields[field].u.iVal = iVal;
+    _libmsi_free_field( &rec->fields[field] );
+    rec->fields[field].type = LIBMSI_FIELD_TYPE_INT;
+    rec->fields[field].u.iVal = iVal;
 
     return TRUE;
 }
@@ -295,8 +287,8 @@ gboolean libmsi_record_is_null( const LibmsiRecord *rec, unsigned field )
 
     g_return_val_if_fail (LIBMSI_IS_RECORD (rec), TRUE);
 
-    r = ( field > rec->priv->count ) ||
-        ( rec->priv->fields[field].type == LIBMSI_FIELD_TYPE_NULL );
+    r = ( field > rec->count ) ||
+        ( rec->fields[field].type == LIBMSI_FIELD_TYPE_NULL );
 
     return r;
 }
@@ -307,14 +299,14 @@ gchar* libmsi_record_get_string(const LibmsiRecord *self, unsigned field)
 
     TRACE ("%p %d\n", self, field);
 
-    if (field > self->priv->count)
+    if (field > self->count)
         return g_strdup (""); // FIXME: really?
 
-    switch (self->priv->fields[field].type) {
+    switch (self->fields[field].type) {
     case LIBMSI_FIELD_TYPE_INT:
-        return g_strdup_printf ("%d", self->priv->fields[field].u.iVal);
+        return g_strdup_printf ("%d", self->fields[field].u.iVal);
     case LIBMSI_FIELD_TYPE_STR:
-        return g_strdup (self->priv->fields[field].u.szVal);
+        return g_strdup (self->fields[field].u.szVal);
     case LIBMSI_FIELD_TYPE_NULL:
         return g_strdup ("");
     }
@@ -324,13 +316,13 @@ gchar* libmsi_record_get_string(const LibmsiRecord *self, unsigned field)
 
 const char *_libmsi_record_get_string_raw( const LibmsiRecord *rec, unsigned field )
 {
-    if( field > rec->priv->count )
+    if( field > rec->count )
         return NULL;
 
-    if( rec->priv->fields[field].type != LIBMSI_FIELD_TYPE_STR )
+    if( rec->fields[field].type != LIBMSI_FIELD_TYPE_STR )
         return NULL;
 
-    return rec->priv->fields[field].u.szVal;
+    return rec->fields[field].u.szVal;
 }
 
 unsigned _libmsi_record_get_string(const LibmsiRecord *rec, unsigned field,
@@ -342,7 +334,7 @@ unsigned _libmsi_record_get_string(const LibmsiRecord *rec, unsigned field,
 
     TRACE("%p %d %p %p\n", rec, field, szValue, pcchValue);
 
-    if( field > rec->priv->count )
+    if( field > rec->count )
     {
         if ( szValue && *pcchValue > 0 )
             szValue[0] = 0;
@@ -352,18 +344,18 @@ unsigned _libmsi_record_get_string(const LibmsiRecord *rec, unsigned field,
     }
 
     ret = LIBMSI_RESULT_SUCCESS;
-    switch( rec->priv->fields[field].type )
+    switch( rec->fields[field].type )
     {
     case LIBMSI_FIELD_TYPE_INT:
-        sprintf(buffer, szFormat, rec->priv->fields[field].u.iVal);
+        sprintf(buffer, szFormat, rec->fields[field].u.iVal);
         len = strlen( buffer );
         if (szValue)
             strcpyn(szValue, buffer, *pcchValue);
         break;
     case LIBMSI_FIELD_TYPE_STR:
-        len = strlen( rec->priv->fields[field].u.szVal );
+        len = strlen( rec->fields[field].u.szVal );
         if (szValue)
-            strcpyn(szValue, rec->priv->fields[field].u.szVal, *pcchValue);
+            strcpyn(szValue, rec->fields[field].u.szVal, *pcchValue);
         break;
     case LIBMSI_FIELD_TYPE_NULL:
         if( szValue && *pcchValue > 0 )
@@ -388,21 +380,21 @@ gboolean libmsi_record_set_string( LibmsiRecord *rec, unsigned field, const char
 
     g_return_val_if_fail (LIBMSI_IS_RECORD (rec), FALSE);
 
-    if( field > rec->priv->count )
+    if( field > rec->count )
         return FALSE;
 
-    _libmsi_free_field( &rec->priv->fields[field] );
+    _libmsi_free_field( &rec->fields[field] );
 
     if( szValue && szValue[0] )
     {
         str = strdup( szValue );
-        rec->priv->fields[field].type = LIBMSI_FIELD_TYPE_STR;
-        rec->priv->fields[field].u.szVal = str;
+        rec->fields[field].type = LIBMSI_FIELD_TYPE_STR;
+        rec->fields[field].u.szVal = str;
     }
     else
     {
-        rec->priv->fields[field].type = LIBMSI_FIELD_TYPE_NULL;
-        rec->priv->fields[field].u.szVal = NULL;
+        rec->fields[field].type = LIBMSI_FIELD_TYPE_NULL;
+        rec->fields[field].u.szVal = NULL;
     }
 
     return TRUE;
@@ -450,12 +442,12 @@ static unsigned _libmsi_addstream_from_file(const char *szFile, GsfInput **pstm)
 
 unsigned _libmsi_record_load_stream(LibmsiRecord *rec, unsigned field, GsfInput *stream)
 {
-    if ( (field == 0) || (field > rec->priv->count) )
+    if ( (field == 0) || (field > rec->count) )
         return LIBMSI_RESULT_INVALID_PARAMETER;
 
-    _libmsi_free_field( &rec->priv->fields[field] );
-    rec->priv->fields[field].type = LIBMSI_FIELD_TYPE_STREAM;
-    rec->priv->fields[field].u.stream = stream;
+    _libmsi_free_field( &rec->fields[field] );
+    rec->fields[field].type = LIBMSI_FIELD_TYPE_STREAM;
+    rec->fields[field].u.stream = stream;
 
     return LIBMSI_RESULT_SUCCESS;
 }
@@ -465,16 +457,16 @@ unsigned _libmsi_record_load_stream_from_file(LibmsiRecord *rec, unsigned field,
     GsfInput *stm;
     unsigned r;
 
-    if( (field == 0) || (field > rec->priv->count) )
+    if( (field == 0) || (field > rec->count) )
         return LIBMSI_RESULT_INVALID_PARAMETER;
 
     /* no filename means we should seek back to the start of the stream */
     if( !szFilename )
     {
-        if( rec->priv->fields[field].type != LIBMSI_FIELD_TYPE_STREAM )
+        if( rec->fields[field].type != LIBMSI_FIELD_TYPE_STREAM )
             return LIBMSI_RESULT_INVALID_FIELD;
 
-        stm = rec->priv->fields[field].u.stream;
+        stm = rec->fields[field].u.stream;
         if( !stm )
             return LIBMSI_RESULT_INVALID_FIELD;
 
@@ -519,19 +511,19 @@ unsigned _libmsi_record_save_stream(const LibmsiRecord *rec, unsigned field, cha
     if( !sz )
         return LIBMSI_RESULT_INVALID_PARAMETER;
 
-    if( field > rec->priv->count)
+    if( field > rec->count)
         return LIBMSI_RESULT_INVALID_PARAMETER;
 
-    if ( rec->priv->fields[field].type == LIBMSI_FIELD_TYPE_NULL )
+    if ( rec->fields[field].type == LIBMSI_FIELD_TYPE_NULL )
     {
         *sz = 0;
         return LIBMSI_RESULT_INVALID_DATA;
     }
 
-    if( rec->priv->fields[field].type != LIBMSI_FIELD_TYPE_STREAM )
+    if( rec->fields[field].type != LIBMSI_FIELD_TYPE_STREAM )
         return LIBMSI_RESULT_INVALID_DATATYPE;
 
-    stm = rec->priv->fields[field].u.stream;
+    stm = rec->fields[field].u.stream;
     if( !stm )
         return LIBMSI_RESULT_INVALID_PARAMETER;
 
@@ -577,13 +569,13 @@ unsigned _libmsi_record_set_gsf_input( LibmsiRecord *rec, unsigned field, GsfInp
 {
     TRACE("%p %d %p\n", rec, field, stm);
 
-    if( field > rec->priv->count )
+    if( field > rec->count )
         return LIBMSI_RESULT_INVALID_FIELD;
 
-    _libmsi_free_field( &rec->priv->fields[field] );
+    _libmsi_free_field( &rec->fields[field] );
 
-    rec->priv->fields[field].type = LIBMSI_FIELD_TYPE_STREAM;
-    rec->priv->fields[field].u.stream = stm;
+    rec->fields[field].type = LIBMSI_FIELD_TYPE_STREAM;
+    rec->fields[field].u.stream = stm;
     g_object_ref(G_OBJECT(stm));
 
     return LIBMSI_RESULT_SUCCESS;
@@ -593,13 +585,13 @@ unsigned _libmsi_record_get_gsf_input( const LibmsiRecord *rec, unsigned field, 
 {
     TRACE("%p %d %p\n", rec, field, pstm);
 
-    if( field > rec->priv->count )
+    if( field > rec->count )
         return LIBMSI_RESULT_INVALID_FIELD;
 
-    if( rec->priv->fields[field].type != LIBMSI_FIELD_TYPE_STREAM )
+    if( rec->fields[field].type != LIBMSI_FIELD_TYPE_STREAM )
         return LIBMSI_RESULT_INVALID_FIELD;
 
-    *pstm = rec->priv->fields[field].u.stream;
+    *pstm = rec->fields[field].u.stream;
     g_object_ref(G_OBJECT(*pstm));
 
     return LIBMSI_RESULT_SUCCESS;
@@ -617,16 +609,16 @@ LibmsiRecord *_libmsi_record_clone(LibmsiRecord *rec)
 
     for (i = 0; i <= count; i++)
     {
-        if (rec->priv->fields[i].type == LIBMSI_FIELD_TYPE_STREAM)
+        if (rec->fields[i].type == LIBMSI_FIELD_TYPE_STREAM)
         {
-            GsfInput *stm = gsf_input_dup(rec->priv->fields[i].u.stream, NULL);
+            GsfInput *stm = gsf_input_dup(rec->fields[i].u.stream, NULL);
             if (!stm)
             {
                 g_object_unref(clone);
                 return NULL;
             }
-	    clone->priv->fields[i].u.stream = stm;
-            clone->priv->fields[i].type = LIBMSI_FIELD_TYPE_STREAM;
+	    clone->fields[i].u.stream = stm;
+            clone->fields[i].type = LIBMSI_FIELD_TYPE_STREAM;
         }
         else
         {
@@ -644,21 +636,21 @@ LibmsiRecord *_libmsi_record_clone(LibmsiRecord *rec)
 
 bool _libmsi_record_compare_fields(const LibmsiRecord *a, const LibmsiRecord *b, unsigned field)
 {
-    if (a->priv->fields[field].type != b->priv->fields[field].type)
+    if (a->fields[field].type != b->fields[field].type)
         return false;
 
-    switch (a->priv->fields[field].type)
+    switch (a->fields[field].type)
     {
         case LIBMSI_FIELD_TYPE_NULL:
             break;
 
         case LIBMSI_FIELD_TYPE_INT:
-            if (a->priv->fields[field].u.iVal != b->priv->fields[field].u.iVal)
+            if (a->fields[field].u.iVal != b->fields[field].u.iVal)
                 return false;
             break;
 
         case LIBMSI_FIELD_TYPE_STR:
-            if (strcmp(a->priv->fields[field].u.szVal, b->priv->fields[field].u.szVal))
+            if (strcmp(a->fields[field].u.szVal, b->fields[field].u.szVal))
                 return false;
             break;
 
@@ -674,10 +666,10 @@ bool _libmsi_record_compare(const LibmsiRecord *a, const LibmsiRecord *b)
 {
     unsigned i;
 
-    if (a->priv->count != b->priv->count)
+    if (a->count != b->count)
         return false;
 
-    for (i = 0; i <= a->priv->count; i++)
+    for (i = 0; i <= a->count; i++)
     {
         if (!_libmsi_record_compare_fields( a, b, i ))
             return false;

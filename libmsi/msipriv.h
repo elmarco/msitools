@@ -73,7 +73,7 @@ typedef struct string_table string_table;
 #define MSI_INITIAL_MEDIA_TRANSFORM_OFFSET 10000
 #define MSI_INITIAL_MEDIA_TRANSFORM_DISKID 30000
 
-struct _LibmsiDatabasePrivate
+struct _LibmsiDatabase
 {
     GObject parent;
 
@@ -96,7 +96,7 @@ struct _LibmsiDatabasePrivate
 
 typedef struct _LibmsiView LibmsiView;
 
-struct _LibmsiQueryPrivate
+struct _LibmsiQuery
 {
     GObject parent;
 
@@ -119,7 +119,7 @@ typedef struct _LibmsiField
     } u;
 } LibmsiField;
 
-struct _LibmsiRecordPrivate
+struct _LibmsiRecord
 {
     GObject parent;
 
@@ -287,7 +287,7 @@ typedef struct _LibmsiOLEVariant
     };
 } LibmsiOLEVariant;
 
-struct _LibmsiSummaryInfoPrivate
+struct _LibmsiSummaryInfo
 {
     GObject parent;
 

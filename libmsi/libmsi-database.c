@@ -43,8 +43,6 @@ enum
 
 G_DEFINE_TYPE (LibmsiDatabase, libmsi_database, G_TYPE_OBJECT);
 
-#define GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE((o), LIBMSI_TYPE_DATABASE, LibmsiDatabasePrivate))
-
 const char clsid_msi_transform[16] = { 0x82, 0x10, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0,0x00, 0x00,0x00,0x00,0x00,0x00,0x46 };
 const char clsid_msi_database[16] = { 0x84, 0x10, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0,0x00, 0x00,0x00,0x00,0x00,0x00,0x46 };
 const char clsid_msi_patch[16] = { 0x86, 0x10, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0,0x00, 0x00,0x00,0x00,0x00,0x00,0x46 };
@@ -94,13 +92,10 @@ libmsi_db_error_quark (void)
 static void
 libmsi_database_init (LibmsiDatabase *self)
 {
-    LibmsiDatabasePrivate *p = GET_PRIVATE (self);
-
-    self->priv = p;
-    list_init (&p->tables);
-    list_init (&p->transforms);
-    list_init (&p->streams);
-    list_init (&p->storages);
+    list_init (&self->tables);
+    list_init (&self->transforms);
+    list_init (&self->streams);
+    list_init (&self->storages);
 }
 
 static void
@@ -112,8 +107,8 @@ libmsi_database_constructed (GObject *object)
 static void
 free_transforms (LibmsiDatabase *db)
 {
-    while (!list_empty(&db->priv->transforms)) {
-        LibmsiTransform *t = LIST_ENTRY(list_head(&db->priv->transforms),
+    while (!list_empty(&db->transforms)) {
+        LibmsiTransform *t = LIST_ENTRY(list_head(&db->transforms),
                                         LibmsiTransform, entry);
         list_remove(&t->entry);
         g_object_unref(G_OBJECT(t->stg));
@@ -125,13 +120,12 @@ static void
 libmsi_database_finalize (GObject *object)
 {
     LibmsiDatabase *self = LIBMSI_DATABASE (object);
-    LibmsiDatabasePrivate *p = self->priv;
 
     _libmsi_database_close (self, false);
     free_cached_tables (self);
     free_transforms (self);
 
-    g_free (p->path);
+    g_free (self->path);
 
     G_OBJECT_CLASS (libmsi_database_parent_class)->finalize (object);
 }
@@ -140,23 +134,23 @@ static void
 libmsi_database_set_property (GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
     g_return_if_fail (LIBMSI_IS_DATABASE (object));
-    LibmsiDatabasePrivate *p = LIBMSI_DATABASE (object)->priv;
+    LibmsiDatabase *self = LIBMSI_DATABASE (object);
 
     switch (prop_id) {
     case PROP_PATH:
-        g_return_if_fail (p->path == NULL);
-        p->path = g_value_dup_string (value);
+        g_return_if_fail (self->path == NULL);
+        self->path = g_value_dup_string (value);
         break;
     case PROP_MODE:
-        g_return_if_fail (p->mode == NULL);
-        p->mode = (const char*)g_value_get_int (value);
+        g_return_if_fail (self->mode == NULL);
+        self->mode = (const char*)g_value_get_int (value);
         break;
     case PROP_OUTPATH:
-        g_return_if_fail (p->outpath == NULL);
-        p->outpath = (const char*)g_value_dup_string (value);
+        g_return_if_fail (self->outpath == NULL);
+        self->outpath = (const char*)g_value_dup_string (value);
         break;
     case PROP_PATCH:
-        p->patch = g_value_get_boolean (value);
+        self->patch = g_value_get_boolean (value);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -168,20 +162,20 @@ static void
 libmsi_database_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
     g_return_if_fail (LIBMSI_IS_DATABASE (object));
-    LibmsiDatabasePrivate *p = LIBMSI_DATABASE (object)->priv;
+    LibmsiDatabase *self = LIBMSI_DATABASE (object);
 
     switch (prop_id) {
     case PROP_PATH:
-        g_value_set_string (value, p->path);
+        g_value_set_string (value, self->path);
         break;
     case PROP_MODE:
-        g_value_set_int (value, (int)p->mode);
+        g_value_set_int (value, (int)self->mode);
         break;
     case PROP_OUTPATH:
-        g_value_set_string (value, p->outpath);
+        g_value_set_string (value, self->outpath);
         break;
     case PROP_PATCH:
-        g_value_set_boolean (value, p->patch);
+        g_value_set_boolean (value, self->patch);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -218,8 +212,6 @@ libmsi_database_class_init (LibmsiDatabaseClass *klass)
         g_param_spec_boolean ("patch", "patch", "patch", FALSE,
                               G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE |
                               G_PARAM_STATIC_STRINGS));
-
-    g_type_class_add_private (klass, sizeof(LibmsiDatabasePrivate));
 }
 
 unsigned msi_open_storage( LibmsiDatabase *db, const char *stname )
@@ -228,7 +220,7 @@ unsigned msi_open_storage( LibmsiDatabase *db, const char *stname )
     LibmsiStorage *storage;
     GsfInput *in;
 
-    LIST_FOR_EACH_ENTRY( storage, &db->priv->storages, LibmsiStorage, entry )
+    LIST_FOR_EACH_ENTRY( storage, &db->storages, LibmsiStorage, entry )
     {
         if( !strcmp( stname, storage->name ) )
         {
@@ -242,7 +234,7 @@ unsigned msi_open_storage( LibmsiDatabase *db, const char *stname )
     if (!storage->name)
         goto done;
 
-    in = gsf_infile_child_by_name(db->priv->infile, stname);
+    in = gsf_infile_child_by_name(db->infile, stname);
     if (!GSF_IS_INFILE(in))
         goto done;
 
@@ -250,7 +242,7 @@ unsigned msi_open_storage( LibmsiDatabase *db, const char *stname )
     if (!storage->stg)
         goto done;
 
-    list_add_tail( &db->priv->storages, &storage->entry );
+    list_add_tail( &db->storages, &storage->entry );
     r = LIBMSI_RESULT_SUCCESS;
 
 done:
@@ -269,10 +261,10 @@ unsigned msi_create_storage( LibmsiDatabase *db, const char *stname, GsfInput *s
     bool found = false;
     unsigned r;
 
-    if ( db->priv->mode == LIBMSI_DB_OPEN_READONLY )
+    if ( db->mode == LIBMSI_DB_OPEN_READONLY )
         return LIBMSI_RESULT_ACCESS_DENIED;
 
-    LIST_FOR_EACH_ENTRY( storage, &db->priv->storages, LibmsiStorage, entry )
+    LIST_FOR_EACH_ENTRY( storage, &db->storages, LibmsiStorage, entry )
     {
         if( !strcmp( stname, storage->name ) )
         {
@@ -300,7 +292,7 @@ unsigned msi_create_storage( LibmsiDatabase *db, const char *stname, GsfInput *s
         if (storage->stg)
             g_object_unref(G_OBJECT(storage->stg));
     } else {
-        list_add_tail( &db->priv->storages, &storage->entry );
+        list_add_tail( &db->storages, &storage->entry );
     }
 
     storage->stg = origstg;
@@ -326,7 +318,7 @@ void msi_destroy_storage( LibmsiDatabase *db, const char *stname )
 {
     LibmsiStorage *storage, *storage2;
 
-    LIST_FOR_EACH_ENTRY_SAFE( storage, storage2, &db->priv->storages, LibmsiStorage, entry )
+    LIST_FOR_EACH_ENTRY_SAFE( storage, storage2, &db->storages, LibmsiStorage, entry )
     {
         if (!strcmp( stname, storage->name ))
         {
@@ -344,7 +336,7 @@ static unsigned find_infile_stream( LibmsiDatabase *db, const char *name, GsfInp
 {
     LibmsiStream *stream;
 
-    LIST_FOR_EACH_ENTRY( stream, &db->priv->streams, LibmsiStream, entry )
+    LIST_FOR_EACH_ENTRY( stream, &db->streams, LibmsiStream, entry )
     {
         if( !strcmp( name, stream->name ) )
         {
@@ -366,7 +358,7 @@ static unsigned msi_alloc_stream( LibmsiDatabase *db, const char *stname, GsfInp
     stream->name = strdup( stname );
     stream->stm = stm;
     g_object_ref(G_OBJECT(stm));
-    list_add_tail( &db->priv->streams, &stream->entry );
+    list_add_tail( &db->streams, &stream->entry );
     return LIBMSI_RESULT_SUCCESS;
 }
 
@@ -378,10 +370,10 @@ unsigned write_raw_stream_data( LibmsiDatabase *db, const char *stname,
     char *mem;
     LibmsiStream *stream;
 
-    if (db->priv->mode == LIBMSI_DB_OPEN_READONLY)
+    if (db->mode == LIBMSI_DB_OPEN_READONLY)
         return LIBMSI_RESULT_FUNCTION_FAILED;
 
-    LIST_FOR_EACH_ENTRY( stream, &db->priv->streams, LibmsiStream, entry )
+    LIST_FOR_EACH_ENTRY( stream, &db->streams, LibmsiStream, entry )
     {
         if( !strcmp( stname, stream->name ) )
         {
@@ -410,12 +402,12 @@ unsigned msi_create_stream( LibmsiDatabase *db, const char *stname, GsfInput *st
     unsigned r = LIBMSI_RESULT_FUNCTION_FAILED;
     bool found = false;
 
-    if ( db->priv->mode == LIBMSI_DB_OPEN_READONLY )
+    if ( db->mode == LIBMSI_DB_OPEN_READONLY )
         return LIBMSI_RESULT_ACCESS_DENIED;
 
     encname = encode_streamname(false, stname);
 
-    LIST_FOR_EACH_ENTRY( stream, &db->priv->streams, LibmsiStream, entry )
+    LIST_FOR_EACH_ENTRY( stream, &db->streams, LibmsiStream, entry )
     {
         if( !strcmp( encname, stream->name ) )
         {
@@ -444,7 +436,7 @@ unsigned msi_enum_db_streams(LibmsiDatabase *db,
     unsigned r;
     LibmsiStream *stream, *stream2;
 
-    LIST_FOR_EACH_ENTRY_SAFE( stream, stream2, &db->priv->streams, LibmsiStream, entry )
+    LIST_FOR_EACH_ENTRY_SAFE( stream, stream2, &db->streams, LibmsiStream, entry )
     {
         GsfInput *stm;
 
@@ -468,7 +460,7 @@ unsigned msi_enum_db_storages(LibmsiDatabase *db,
     unsigned r;
     LibmsiStorage *storage, *storage2;
 
-    LIST_FOR_EACH_ENTRY_SAFE( storage, storage2, &db->priv->storages, LibmsiStorage, entry )
+    LIST_FOR_EACH_ENTRY_SAFE( storage, storage2, &db->storages, LibmsiStorage, entry )
     {
         GsfInfile *stg;
 
@@ -518,7 +510,7 @@ unsigned msi_get_raw_stream( LibmsiDatabase *db, const char *stname, GsfInput **
     if (clone_infile_stream( db, stname, stm ) == LIBMSI_RESULT_SUCCESS)
         return LIBMSI_RESULT_SUCCESS;
 
-    LIST_FOR_EACH_ENTRY( transform, &db->priv->transforms, LibmsiTransform, entry )
+    LIST_FOR_EACH_ENTRY( transform, &db->transforms, LibmsiTransform, entry )
     {
         *stm = gsf_infile_child_by_name( transform->stg, stname );
         if (*stm)
@@ -535,7 +527,7 @@ void msi_destroy_stream( LibmsiDatabase *db, const char *stname )
 {
     LibmsiStream *stream, *stream2;
 
-    LIST_FOR_EACH_ENTRY_SAFE( stream, stream2, &db->priv->streams, LibmsiStream, entry )
+    LIST_FOR_EACH_ENTRY_SAFE( stream, stream2, &db->streams, LibmsiStream, entry )
     {
         if (!strcmp( stname, stream->name ))
         {
@@ -551,9 +543,9 @@ void msi_destroy_stream( LibmsiDatabase *db, const char *stname )
 
 static void free_storages( LibmsiDatabase *db )
 {
-    while( !list_empty( &db->priv->storages ) )
+    while( !list_empty( &db->storages ) )
     {
-        LibmsiStorage *s = LIST_ENTRY(list_head( &db->priv->storages ), LibmsiStorage, entry);
+        LibmsiStorage *s = LIST_ENTRY(list_head( &db->storages ), LibmsiStorage, entry);
         list_remove( &s->entry );
         g_object_unref(G_OBJECT(s->stg));
         msi_free( s->name );
@@ -563,9 +555,9 @@ static void free_storages( LibmsiDatabase *db )
 
 static void free_streams( LibmsiDatabase *db )
 {
-    while( !list_empty( &db->priv->streams ) )
+    while( !list_empty( &db->streams ) )
     {
-        LibmsiStream *s = LIST_ENTRY(list_head( &db->priv->streams ), LibmsiStream, entry);
+        LibmsiStream *s = LIST_ENTRY(list_head( &db->streams ), LibmsiStream, entry);
         list_remove( &s->entry );
         g_object_unref(G_OBJECT(s->stm));
         msi_free( s->name );
@@ -580,7 +572,7 @@ void append_storage_to_db( LibmsiDatabase *db, GsfInfile *stg )
     t = msi_alloc( sizeof *t );
     t->stg = stg;
     g_object_ref(G_OBJECT(t->stg));
-    list_add_head( &db->priv->transforms, &t->entry );
+    list_add_head( &db->transforms, &t->entry );
 
 #if 0
     /* the transform may add or replace streams...
@@ -595,41 +587,41 @@ LibmsiResult _libmsi_database_close(LibmsiDatabase *db, bool committed)
 {
     TRACE("%p %d\n", db, committed);
 
-    if ( db->priv->strings )
+    if ( db->strings )
     {
-        msi_destroy_stringtable( db->priv->strings);
-        db->priv->strings = NULL;
+        msi_destroy_stringtable( db->strings);
+        db->strings = NULL;
     }
 
-    if ( db->priv->infile )
+    if ( db->infile )
     {
-        g_object_unref(G_OBJECT(db->priv->infile));
-        db->priv->infile = NULL;
+        g_object_unref(G_OBJECT(db->infile));
+        db->infile = NULL;
     }
 
-    if ( db->priv->outfile )
+    if ( db->outfile )
     {
-        gsf_output_close(GSF_OUTPUT(db->priv->outfile));
-        g_object_unref(G_OBJECT(db->priv->outfile));
-        db->priv->outfile = NULL;
+        gsf_output_close(GSF_OUTPUT(db->outfile));
+        g_object_unref(G_OBJECT(db->outfile));
+        db->outfile = NULL;
     }
     free_streams( db );
     free_storages( db );
 
-    if (db->priv->outpath) {
+    if (db->outpath) {
         if (!committed) {
-            unlink( db->priv->outpath );
-            msi_free( db->priv->outpath );
-        } else if (db->priv->rename_outpath) {
-            unlink(db->priv->path);
-            rename(db->priv->outpath, db->priv->path);
-            msi_free( db->priv->outpath );
+            unlink( db->outpath );
+            msi_free( db->outpath );
+        } else if (db->rename_outpath) {
+            unlink(db->path);
+            rename(db->outpath, db->path);
+            msi_free( db->outpath );
         } else {
-            msi_free( db->priv->path );
-            db->priv->path = db->priv->outpath;
+            msi_free( db->path );
+            db->path = db->outpath;
         }
     }
-    db->priv->outpath = NULL;
+    db->outpath = NULL;
 }
 
 LibmsiResult _libmsi_database_start_transaction(LibmsiDatabase *db)
@@ -640,24 +632,24 @@ LibmsiResult _libmsi_database_start_transaction(LibmsiDatabase *db)
     char *tmpfile = NULL;
     char path[PATH_MAX];
 
-    if( db->priv->mode == LIBMSI_DB_OPEN_READONLY )
+    if( db->mode == LIBMSI_DB_OPEN_READONLY )
         return LIBMSI_RESULT_SUCCESS;
 
-    db->priv->rename_outpath = false;
-    if( !db->priv->outpath )
+    db->rename_outpath = false;
+    if( !db->outpath )
     {
-        strcpy( path, db->priv->path );
-        if( db->priv->mode == LIBMSI_DB_OPEN_TRANSACT )
+        strcpy( path, db->path );
+        if( db->mode == LIBMSI_DB_OPEN_TRANSACT )
 	{
             strcat( path, ".tmp" );
-            db->priv->rename_outpath = true;
+            db->rename_outpath = true;
 	}
-        db->priv->outpath = strdup(path);
+        db->outpath = strdup(path);
     }
 
     TRACE("%p %s\n", db, szPersist);
 
-    out = gsf_output_stdio_new(db->priv->outpath, NULL);
+    out = gsf_output_stdio_new(db->outpath, NULL);
     if (!out)
     {
         WARN("open file failed for %s\n", debugstr_a(db->outpath));
@@ -672,21 +664,21 @@ LibmsiResult _libmsi_database_start_transaction(LibmsiDatabase *db)
     }
 
     if (!gsf_outfile_msole_set_class_id(GSF_OUTFILE_MSOLE(stg),
-                                       db->priv->patch ? clsid_msi_patch : clsid_msi_database ))
+                                       db->patch ? clsid_msi_patch : clsid_msi_database ))
     {
         WARN("set guid failed\n");
         ret = LIBMSI_RESULT_FUNCTION_FAILED;
         goto end;
     }
 
-    db->priv->outfile = stg;
-    g_object_ref(G_OBJECT(db->priv->outfile));
+    db->outfile = stg;
+    g_object_ref(G_OBJECT(db->outfile));
 
 end:
     if (ret) {
-        if (db->priv->outfile)
-            g_object_unref(G_OBJECT(db->priv->outfile));
-        db->priv->outfile = NULL;
+        if (db->outfile)
+            g_object_unref(G_OBJECT(db->outfile));
+        db->outfile = NULL;
     }
     if (stg)
         g_object_unref(G_OBJECT(stg));
@@ -1155,7 +1147,7 @@ static unsigned _libmsi_database_import(LibmsiDatabase *db, const char *folder, 
     if (num_columns == 1 && !columns[0][0] && num_labels == 1 && !labels[0][0] &&
         num_types == 2 && !strcmp( types[1], forcecodepage ))
     {
-        r = msi_set_string_table_codepage( db->priv->strings, atoi( types[0] ) );
+        r = msi_set_string_table_codepage( db->strings, atoi( types[0] ) );
         goto done;
     }
 
@@ -1302,7 +1294,7 @@ static unsigned _libmsi_database_export( LibmsiDatabase *db, const char *table,
 
     if (!strcmp( table, forcecodepage ))
     {
-        unsigned codepage = msi_get_string_table_codepage( db->priv->strings );
+        unsigned codepage = msi_get_string_table_codepage( db->strings );
         r = msi_export_forcecodepage( fd, codepage );
         goto done;
     }
@@ -2051,7 +2043,7 @@ LibmsiDBState libmsi_database_get_state( LibmsiDatabase *db )
         return LIBMSI_RESULT_INVALID_HANDLE;
 
     g_object_ref(db);
-    if (db->priv->mode != LIBMSI_DB_OPEN_READONLY )
+    if (db->mode != LIBMSI_DB_OPEN_READONLY )
         ret = LIBMSI_DB_STATE_WRITE;
     g_object_unref(db);
 
@@ -2064,13 +2056,13 @@ static void cache_infile_structure( LibmsiDatabase *db )
     char decname[0x40];
     unsigned r;
 
-    n = gsf_infile_num_children(db->priv->infile);
+    n = gsf_infile_num_children(db->infile);
 
     /* TODO: error handling */
 
     for (i = 0; i < n; i++)
     {
-        GsfInput *in = gsf_infile_child_by_index(db->priv->infile, i);
+        GsfInput *in = gsf_infile_child_by_index(db->infile, i);
         const uint8_t *name = (const uint8_t *) gsf_input_name(in);
 
         /* table streams are not in the _Streams table */
@@ -2104,19 +2096,19 @@ LibmsiResult _libmsi_database_open(LibmsiDatabase *db)
     uint8_t uuid[16];
     unsigned ret = LIBMSI_RESULT_OPEN_FAILED;
 
-    TRACE("%p %s\n", db, db->priv->path);
+    TRACE("%p %s\n", db, db->path);
 
-    in = gsf_input_stdio_new(db->priv->path, NULL);
+    in = gsf_input_stdio_new(db->path, NULL);
     if (!in)
     {
-        WARN("open file failed for %s\n", debugstr_a(db->priv->path));
+        WARN("open file failed for %s\n", debugstr_a(db->path));
         return LIBMSI_RESULT_OPEN_FAILED;
     }
     stg = gsf_infile_msole_new( in, NULL );
     g_object_unref(G_OBJECT(in));
     if( !stg )
     {
-        WARN("open failed for %s\n", debugstr_a(db->priv->path));
+        WARN("open failed for %s\n", debugstr_a(db->path));
         return LIBMSI_RESULT_OPEN_FAILED;
     }
 
@@ -2135,28 +2127,28 @@ LibmsiResult _libmsi_database_open(LibmsiDatabase *db)
         goto end;
     }
 
-    if ( db->priv->patch && memcmp( uuid, clsid_msi_patch, 16 ) != 0 )
+    if ( db->patch && memcmp( uuid, clsid_msi_patch, 16 ) != 0 )
     {
         ERR("storage GUID is not the MSI patch GUID %s\n",
              debugstr_guid(uuid) );
         goto end;
     }
 
-    db->priv->infile = stg;
-    g_object_ref(G_OBJECT(db->priv->infile));
+    db->infile = stg;
+    g_object_ref(G_OBJECT(db->infile));
 
     cache_infile_structure( db );
 
-    db->priv->strings = msi_load_string_table( db->priv->infile, &db->priv->bytes_per_strref );
-    if( !db->priv->strings )
+    db->strings = msi_load_string_table( db->infile, &db->bytes_per_strref );
+    if( !db->strings )
         goto end;
 
     ret = LIBMSI_RESULT_SUCCESS;
 end:
     if (ret) {
-        if (db->priv->infile)
-            g_object_unref(G_OBJECT(db->priv->infile));
-        db->priv->infile = NULL;
+        if (db->infile)
+            g_object_unref(G_OBJECT(db->infile));
+        db->infile = NULL;
     }
     g_object_unref(G_OBJECT(stg));
     return ret;
@@ -2247,7 +2239,7 @@ static unsigned commit_storage( const char *name, GsfInfile *stg, void *opaque)
 
     TRACE("%s %p %p\n", debugstr_a(name), stg, opaque);
 
-    outstg = GSF_OUTFILE(gsf_outfile_new_child( db->priv->outfile, name, true ));
+    outstg = GSF_OUTFILE(gsf_outfile_new_child( db->outfile, name, true ));
     if ( !outstg )
         return LIBMSI_RESULT_FUNCTION_FAILED;
 
@@ -2272,7 +2264,7 @@ static unsigned commit_stream( const char *name, GsfInput *stm, void *opaque)
     decode_streamname(name, decname);
     TRACE("%s(%s) %p %p\n", debugstr_a(name), debugstr_a(decname), stm, opaque);
 
-    outstm = gsf_outfile_new_child( db->priv->outfile, name, false );
+    outstm = gsf_outfile_new_child( db->outfile, name, false );
     if ( !outstm )
         return LIBMSI_RESULT_FUNCTION_FAILED;
 
@@ -2300,12 +2292,12 @@ LibmsiResult libmsi_database_commit( LibmsiDatabase *db )
         return LIBMSI_RESULT_INVALID_HANDLE;
 
     g_object_ref(db);
-    if (db->priv->mode == LIBMSI_DB_OPEN_READONLY)
+    if (db->mode == LIBMSI_DB_OPEN_READONLY)
         goto end;
 
     /* FIXME: lock the database */
 
-    r = msi_save_string_table( db->priv->strings, db, &bytes_per_strref );
+    r = msi_save_string_table( db->strings, db, &bytes_per_strref );
     if( r != LIBMSI_RESULT_SUCCESS )
     {
         WARN("failed to save string table r=%08x\n",r);
@@ -2333,12 +2325,12 @@ LibmsiResult libmsi_database_commit( LibmsiDatabase *db )
         goto end;
     }
 
-    db->priv->bytes_per_strref = bytes_per_strref;
+    db->bytes_per_strref = bytes_per_strref;
 
     /* FIXME: unlock the database */
 
     _libmsi_database_close(db, true);
-    db->priv->mode = LIBMSI_DB_OPEN_TRANSACT;
+    db->mode = LIBMSI_DB_OPEN_TRANSACT;
     _libmsi_database_open(db);
     _libmsi_database_start_transaction(db);
 
@@ -2455,21 +2447,20 @@ LibmsiCondition libmsi_database_is_table_persistent(
 static gboolean
 init (LibmsiDatabase *self, GError **error)
 {
-    LibmsiDatabasePrivate *p = LIBMSI_DATABASE (self)->priv;
     LibmsiResult ret;
 
-    if (p->mode == LIBMSI_DB_OPEN_CREATE) {
-        p->strings = msi_init_string_table (&p->bytes_per_strref);
+    if (self->mode == LIBMSI_DB_OPEN_CREATE) {
+        self->strings = msi_init_string_table (&self->bytes_per_strref);
     } else {
         if (_libmsi_database_open(self))
             return FALSE;
     }
 
-    p->media_transform_offset = MSI_INITIAL_MEDIA_TRANSFORM_OFFSET;
-    p->media_transform_disk_id = MSI_INITIAL_MEDIA_TRANSFORM_DISKID;
+    self->media_transform_offset = MSI_INITIAL_MEDIA_TRANSFORM_OFFSET;
+    self->media_transform_disk_id = MSI_INITIAL_MEDIA_TRANSFORM_DISKID;
 
     if (TRACE_ON(msi))
-        enum_stream_names (p->infile);
+        enum_stream_names (self->infile);
 
     ret = _libmsi_database_start_transaction (self);
 

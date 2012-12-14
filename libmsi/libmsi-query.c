@@ -37,35 +37,29 @@ enum
 
 G_DEFINE_TYPE (LibmsiQuery, libmsi_query, G_TYPE_OBJECT);
 
-#define GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE((o), LIBMSI_TYPE_QUERY, LibmsiQueryPrivate))
-
 static void
 libmsi_query_init (LibmsiQuery *self)
 {
-    LibmsiQueryPrivate *p = GET_PRIVATE (self);
-
-    self->priv = p;
-    list_init (&p->mem);
+    list_init (&self->mem);
 }
 
 static void
 libmsi_query_finalize (GObject *object)
 {
     LibmsiQuery *self = LIBMSI_QUERY (object);
-    LibmsiQueryPrivate *p = self->priv;
     struct list *ptr, *t;
 
-    if (p->view && p->view->ops->delete)
-        p->view->ops->delete (p->view);
+    if (self->view && self->view->ops->delete)
+        self->view->ops->delete (self->view);
 
-    if (p->database)
-        g_object_unref (p->database);
+    if (self->database)
+        g_object_unref (self->database);
 
-    LIST_FOR_EACH_SAFE (ptr, t, &p->mem) {
+    LIST_FOR_EACH_SAFE (ptr, t, &self->mem) {
         msi_free (ptr);
     }
 
-    g_free (p->query);
+    g_free (self->query);
 
     G_OBJECT_CLASS (libmsi_query_parent_class)->finalize (object);
 }
@@ -73,17 +67,17 @@ libmsi_query_finalize (GObject *object)
 static void
 libmsi_query_set_property (GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
-    LibmsiQueryPrivate *p = GET_PRIVATE (object);
     g_return_if_fail (LIBMSI_IS_QUERY (object));
+    LibmsiQuery *self = LIBMSI_QUERY (object);
 
     switch (prop_id) {
     case PROP_DATABASE:
-        g_return_if_fail (p->database == NULL);
-        p->database = g_value_dup_object (value);
+        g_return_if_fail (self->database == NULL);
+        self->database = g_value_dup_object (value);
         break;
     case PROP_QUERY:
-        g_return_if_fail (p->query == NULL);
-        p->query = g_value_dup_string (value);
+        g_return_if_fail (self->query == NULL);
+        self->query = g_value_dup_string (value);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -94,15 +88,15 @@ libmsi_query_set_property (GObject *object, guint prop_id, const GValue *value, 
 static void
 libmsi_query_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
-    LibmsiQueryPrivate *p = GET_PRIVATE (object);
     g_return_if_fail (LIBMSI_IS_QUERY (object));
+    LibmsiQuery *self = LIBMSI_QUERY (object);
 
     switch (prop_id) {
     case PROP_DATABASE:
-        g_value_set_object (value, p->database);
+        g_value_set_object (value, self->database);
         break;
     case PROP_QUERY:
-        g_value_set_string (value, p->query);
+        g_value_set_string (value, self->query);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -135,18 +129,15 @@ libmsi_query_class_init (LibmsiQueryClass *klass)
         g_param_spec_string ("query", "query", "query", NULL,
                              G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE |
                              G_PARAM_STATIC_STRINGS));
-
-    g_type_class_add_private (klass, sizeof(LibmsiQueryPrivate));
 }
 
 /* TODO: use GInitable */
 static gboolean
 init (LibmsiQuery *self, GError **error)
 {
-    LibmsiQueryPrivate *p = self->priv;
     unsigned r;
 
-    r = _libmsi_parse_sql (p->database, p->query, &p->view, &p->mem);
+    r = _libmsi_parse_sql (self->database, self->query, &self->view, &self->mem);
 
     return r == LIBMSI_RESULT_SUCCESS;
 }
@@ -369,7 +360,7 @@ unsigned msi_view_get_row(LibmsiDatabase *db, LibmsiView *view, unsigned row, Li
         {
             const char *sval;
 
-            sval = msi_string_lookup_id(db->priv->strings, ival);
+            sval = msi_string_lookup_id(db->strings, ival);
             libmsi_record_set_string(*rec, i, sval);
         }
         else
@@ -391,13 +382,13 @@ LibmsiResult _libmsi_query_fetch(LibmsiQuery *query, LibmsiRecord **prec)
 
     TRACE("%p %p\n", query, prec );
 
-    view = query->priv->view;
+    view = query->view;
     if( !view )
         return LIBMSI_RESULT_FUNCTION_FAILED;
 
-    r = msi_view_get_row(query->priv->database, view, query->priv->row, prec);
+    r = msi_view_get_row(query->database, view, query->row, prec);
     if (r == LIBMSI_RESULT_SUCCESS)
-        query->priv->row ++;
+        query->row ++;
 
     return r;
 }
@@ -431,7 +422,7 @@ LibmsiResult libmsi_query_close(LibmsiQuery *query)
         return LIBMSI_RESULT_INVALID_HANDLE;
 
     g_object_ref(query);
-    view = query->priv->view;
+    view = query->view;
     if( !view )
         return LIBMSI_RESULT_FUNCTION_FAILED;
     if( !view->ops->close )
@@ -448,12 +439,12 @@ LibmsiResult _libmsi_query_execute(LibmsiQuery *query, LibmsiRecord *rec )
 
     TRACE("%p %p\n", query, rec);
 
-    view = query->priv->view;
+    view = query->view;
     if( !view )
         return LIBMSI_RESULT_FUNCTION_FAILED;
     if( !view->ops->execute )
         return LIBMSI_RESULT_FUNCTION_FAILED;
-    query->priv->row = 0;
+    query->row = 0;
 
     return view->ops->execute( view, rec );
 }
@@ -521,7 +512,7 @@ unsigned _libmsi_query_get_column_info( LibmsiQuery *query, LibmsiColInfo info, 
 {
     unsigned r = LIBMSI_RESULT_FUNCTION_FAILED, i, count = 0, type;
     LibmsiRecord *rec;
-    LibmsiView *view = query->priv->view;
+    LibmsiView *view = query->view;
     const char *name;
     bool temporary;
 
@@ -593,7 +584,7 @@ LibmsiDBError libmsi_query_get_error( LibmsiQuery *query, char *buffer, unsigned
         return LIBMSI_DB_ERROR_INVALIDARG;
 
     g_object_ref(query);
-    if ((r = query->priv->view->error)) column = query->priv->view->error_column;
+    if ((r = query->view->error)) column = query->view->error_column;
     else column = szEmpty;
 
     len = strlen(column);
