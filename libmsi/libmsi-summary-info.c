@@ -255,7 +255,8 @@ static gchar* filetime_to_string (guint64 ft)
 
 static void parse_filetime( const char *str, guint64 *ft )
 {
-    struct tm tm;
+    /* set to 0, tm_isdst can make the result vary: */
+    struct tm tm = { 0, };
     time_t t;
     const char *p = str;
     char *end;
